@@ -282,12 +282,14 @@ Node *unary(){
     if(consume((char*)"&")){
         return new_node('-',new_node_num(0),primary());
     }
-    std::cout << tokens[pos].val << std::endl;
+    Node *p = primary();
+    std::cout << p->val << std::endl;
     std::cout << "end unary" << std::endl;
-    return primary();
+    return p;
 }
 
 Node *mul(){
+    std::cout << "begin mul" << std::endl;
     Node *node = unary();
     
     for(;;){
@@ -296,12 +298,15 @@ Node *mul(){
         }else if(consume((char*)"/")){
             node = new_node('/',node,unary());
         }else{
+            std::cout << node->val << std::endl;
+            std::cout << "end mul" << std::endl;
             return node;
         }
     }
 }
 
 Node *add(){
+    std::cout << "begin add" << std::endl;
     Node *node = mul();
     
     for(;;){
@@ -310,6 +315,8 @@ Node *add(){
         }else if(consume((char*)"-")){
             node = new_node('-',node,mul());
         }else{
+            std::cout << node->val << std::endl;
+            std::cout << "end add" << std::endl;
             return node;
         }
     }
@@ -317,6 +324,7 @@ Node *add(){
 }
 
 Node *relational(){
+    std::cout << "begin relational" << std::endl;
     Node *node = add();
     
     char setle[] = "<=",setre[] = ">=";
@@ -330,6 +338,8 @@ Node *relational(){
         }else if(consume(setre)){  // >=
             node = new_node(ND_SETLE,add(),node);
         }else{
+            std::cout << node->val << std::endl;
+            std::cout << "end relational" << std::endl;
             return node;
         }
     }
@@ -337,6 +347,7 @@ Node *relational(){
 }
 
 Node *equality(){
+    std::cout << "begin equality" << std::endl;
     Node *node = relational();
 
     for(;;){
@@ -347,6 +358,8 @@ Node *equality(){
             pos++;
             node = new_node(ND_SETNE,node,relational());
         }else{
+            std::cout << node->val << std::endl;
+            std::cout << "end equality" << std::endl;
             return node;
         }
     }
@@ -354,11 +367,13 @@ Node *equality(){
 
 
 Node *assign(){
+    std::cout << "begin assign" << std::endl;
     Node *node = equality();
     if(consume((char*)"=")){
         node = new_node(ND_ASSIGN,node,assign());
     }
-    
+    std::cout << node->val << std::endl;
+    std::cout << "end assign" << std::endl;
     return node;
 
 }
