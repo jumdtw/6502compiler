@@ -1,14 +1,24 @@
 CC = g++
+SRCS_DIR = ./source
+SRCS = com65.cpp
 
-TARGET = asm65
-OBJ = com65.o
+BUILD_DIR = Build
+
+TARGET = ./bin/com65
+OBJS = $(addprefix $(BUILD_DIR)/,$(patsubst %.cpp,%.o,$(SRCS)))
 FLAG = -Wall
 
-$(TARGET): $(OBJ) Makefile
-	$(CC) $(FLAG) -o $@ $(OBJ)
 
-%.o: %.cpp Makefile
-	$(CC) $*.cpp -c -o $*.o
+all: $(BUILD_DIR)  $(TARGET)
+
+$(TARGET): $(OBJS)
+	$(CC) $(FLAG) -o $@ $(OBJS)
+
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
+
+$(BUILD_DIR)/%.o: $(SRCS_DIR)/%.cpp
+	$(CC) $(SRCS_DIR)/$*.cpp -c -o $(BUILD_DIR)/$*.o
 
 clean:
-	del $(OBJ)
+	del $(OBJS)
