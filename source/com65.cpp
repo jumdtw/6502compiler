@@ -31,7 +31,7 @@ enum {
 };
 
 enum{
-    ND_NUM,
+    ND_NUM = 4334,
     // 比較演算
     ND_ASSIGN,
     ND_RETURN,
@@ -58,10 +58,10 @@ typedef struct LVar LVar;
 typedef struct LFunc LFunc;
 
 struct Node{
+    std::vector<Node*> stmts;
     int ty;
     Node *lhs;
     Node *rhs;
-    std::vector<Node*> stmts;
     int val;
     int offset;
     char *str;
@@ -141,6 +141,8 @@ Node *new_node_num(int val){
     Node *node = (Node *)malloc(sizeof(Node));
     node->ty = ND_NUM;
     node->val = val;
+    node->lhs = NULL;
+    node->rhs = NULL;
     return node;
 }
 
@@ -213,7 +215,7 @@ std::vector<Node*> call_arrgument(){
 }
 
 Node *primary(){
-    std::cout << "begin primary" << std::endl;
+
     if(consume((char*)"(")){
         Node *node = expr();
         if(consume((char*)")")){
@@ -222,8 +224,6 @@ Node *primary(){
     }
 
     if(tokens[pos].ty == TK_NUM){
-        std::cout << tokens[pos].val << std::endl;
-        std::cout << "end primary" << std::endl;
         return new_node_num(tokens[pos++].val);
     }
     
@@ -269,7 +269,7 @@ Node *primary(){
 }
 
 Node *unary(){
-    std::cout << "begin unary" << std::endl;
+
     if(consume((char*)"+")){
         return primary();
     }
@@ -283,13 +283,11 @@ Node *unary(){
         return new_node('-',new_node_num(0),primary());
     }
     Node *p = primary();
-    std::cout << p->val << std::endl;
-    std::cout << "end unary" << std::endl;
     return p;
 }
 
 Node *mul(){
-    std::cout << "begin mul" << std::endl;
+
     Node *node = unary();
     
     for(;;){
@@ -298,15 +296,13 @@ Node *mul(){
         }else if(consume((char*)"/")){
             node = new_node('/',node,unary());
         }else{
-            std::cout << node->val << std::endl;
-            std::cout << "end mul" << std::endl;
             return node;
         }
     }
 }
 
 Node *add(){
-    std::cout << "begin add" << std::endl;
+
     Node *node = mul();
     
     for(;;){
@@ -315,8 +311,6 @@ Node *add(){
         }else if(consume((char*)"-")){
             node = new_node('-',node,mul());
         }else{
-            std::cout << node->val << std::endl;
-            std::cout << "end add" << std::endl;
             return node;
         }
     }
@@ -324,7 +318,7 @@ Node *add(){
 }
 
 Node *relational(){
-    std::cout << "begin relational" << std::endl;
+
     Node *node = add();
     
     char setle[] = "<=",setre[] = ">=";
@@ -338,8 +332,6 @@ Node *relational(){
         }else if(consume(setre)){  // >=
             node = new_node(ND_SETLE,add(),node);
         }else{
-            std::cout << node->val << std::endl;
-            std::cout << "end relational" << std::endl;
             return node;
         }
     }
@@ -347,7 +339,7 @@ Node *relational(){
 }
 
 Node *equality(){
-    std::cout << "begin equality" << std::endl;
+
     Node *node = relational();
 
     for(;;){
@@ -358,8 +350,6 @@ Node *equality(){
             pos++;
             node = new_node(ND_SETNE,node,relational());
         }else{
-            std::cout << node->val << std::endl;
-            std::cout << "end equality" << std::endl;
             return node;
         }
     }
@@ -367,18 +357,18 @@ Node *equality(){
 
 
 Node *assign(){
-    std::cout << "begin assign" << std::endl;
+
     Node *node = equality();
     if(consume((char*)"=")){
         node = new_node(ND_ASSIGN,node,assign());
     }
-    std::cout << node->val << std::endl;
-    std::cout << "end assign" << std::endl;
+
     return node;
 
 }
 
 Node *expr(){
+
     // 変数宣言
     if(check_func_type(tokens[pos].ty)){
         // 型種類処理
@@ -400,7 +390,8 @@ Node *expr(){
         return assign();
     }else{
         // 変数宣言でない処理。
-        return assign();
+        Node *p = assign();
+        return p;
     }
 }
 
@@ -565,7 +556,6 @@ void gen(Node *node){
     }
     
     if(node->ty == ND_RETURN){
-        
         gen(node->lhs);
         printf("    pop rax\n");
         printf("    mov rsp, rbp\n");
@@ -857,11 +847,13 @@ int main(int argc,char **argv){
         }
     }
 
-    printf("%s:\n",main_str);
-    printf("    push rbp\n");
-    printf("    mov rbp, rsp\n");
     int lvar_size = main_func->lvar_locals.size();
-    printf("    sub rsp, %d\n",lvar_size*8);
+    printf("%s:\n",main_str);
+    if(lvar_size>0){
+        printf("    push rbp\n");
+        printf("    mov rbp, rsp\n");
+        printf("    sub rsp, %d\n",lvar_size*8);
+    }
 
     for(int i=0;i<main_func->code.size();i++){
         gen(main_func->code[i]);
