@@ -1,6 +1,6 @@
 CC = g++
 SRCS_DIR = ./source
-SRCS = com65.cpp
+SRCS = com65.cpp tokenize.cpp
 
 BUILD_DIR = Build
 
