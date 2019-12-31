@@ -1,73 +1,12 @@
 
 #include<stdio.h>
+#include<stdlib.h>
 #include<string.h>
 #include<time.h>
 #include<vector>
 #include<iostream>
 #include"../include/tokenize.hpp"
-
-
-#define INT_SIZE 4
-
-enum{
-    ND_NUM = 4334,
-    // 比較演算
-    ND_ASSIGN,
-    ND_RETURN,
-    ND_IF,
-    ND_ELSE,
-    ND_WHILE,
-    ND_FUNC,
-    ND_FUNC_DEFINE,
-    ND_LVAR,
-    ND_BLOCK,
-    ND_INT,
-    ND_DOUBLE,
-    ND_ADDR, //&
-    ND_DEREF,//* アドレス参照
-    ND_SETE,  // ==
-    ND_SETL,  // <
-    ND_SETLE, // <=
-    ND_SETNE, // !=
-};
-
-
-typedef struct Node Node;
-typedef struct LVar LVar;
-typedef struct LFunc LFunc;
-
-struct Node{
-
-    int ty;
-    int val;
-    int offset;
-    int len;
-    std::vector<Node*> stmts;
-    Node *lhs;
-    Node *rhs;
-    char *str;
-};
-
-
-
-struct LVar{
-    char *name; //変数名
-    int type;  // 変数の型
-    int len;    //name.len()
-    int val;
-    int offset; //
-};
-
-struct LFunc{
-    int type;  // 関数の型
-    int len;
-    // 構文木がここにはいっている
-    std::vector<Node*> code;
-    // ローカル変数リスト
-    std::vector<LVar*> lvar_locals;
-    char *name;
-
-};
+#include"../include/parse.hpp"
 
 Node *expr();
 Node *stmt();
@@ -547,35 +486,36 @@ void gen(Node *node){
         printf("    cmp rax, 0\n");
         
         if(node->rhs->ty==ND_ELSE){
-            printf("    je  .%delse\n",L);
+            printf("    je  %delse\n",L);
             gen(node->rhs->lhs);
-            printf("    jmp .%dend\n",L);
-            printf(".%delse:\n",L);
+            printf("    jmp %dend\n",L);
+            printf(".%delse",L);
             gen(node->rhs->rhs);
         }else{
-            printf("    je  .%dend\n",L);
+            printf("    je  %dend\n",L);
             gen(node->rhs);
         }
-        printf(".%dend:\n",L);
+        printf(".%dend",L);
         return;
     }
     
     if(node->ty == ND_WHILE){
         srand((unsigned int)time(NULL));
         int L = rand()%10000;
-        printf(".%dbegin:\n",L);
+        printf(".%dbegin",L);
         gen(node->lhs);
         printf("    pop rax\n");
         printf("    cmp rax, 0\n");
-        printf("    je  .%dend\n",L);
+        printf("    je  %dend\n",L);
         gen(node->rhs);
-        printf("    jmp .%dbegin\n",L);
-        printf(".%dend:\n",L);
+        printf("    jmp %dbegin\n",L);
+        printf(".%dend",L);
         return;
     }
     
     if(node->ty == ND_NUM){
-        printf("    push %d\n",node->val);
+        printf("    lda %d\n",node->val);
+        printf("    pha\n");
         return;
     }else if(node->ty==ND_LVAR){
         gen_lval(node);
@@ -596,19 +536,37 @@ void gen(Node *node){
     gen(node->lhs);
     gen(node->rhs);
 
-
-    printf("    pop rdi\n");
-    printf("    pop rax\n");
+    srand((unsigned int)time(NULL));
+    int random = rand();
 
     switch(node->ty){
+
         case '+':
-            printf("    add rax, rdi\n");
+            printf("    clc\n");
+            printf("    pla\n");
+            printf("    sta $0\n");
+            printf("    pla a\n");
+            printf("    adc $0\n");
             break;
         case '-':
-            printf("    sub rax ,rdi\n");
+            printf("    sec\n");
+            printf("    pla\n");
+            printf("    sta $0\n");
+            printf("    pla a\n");
+            printf("    sbc $0\n");
             break;
         case '*':
-            printf("    mul rdi\n");
+            printf("    pla\n");
+            printf("    sta $0\n");
+            printf("    ldx $0\n");
+            printf("    pla\n");
+            printf("    sta $0\n");
+            printf("    lda #$0\n");
+            printf("    clc\n");
+            printf(".%d_mul_start",random);
+            printf("    adc $0\n");
+            printf("    dex\n");
+            printf("    bne %d_mul_start\n",random);
             break;
         case '/':
             printf("    mov rdx, 0\n");
@@ -637,7 +595,7 @@ void gen(Node *node){
             break;
     }
 
-    printf("    push rax\n");
+    printf("    pha\n");
 }
 
 
@@ -660,9 +618,7 @@ int main(int argc,char **argv){
     */
     program();
     
-    printf(".intel_syntax noprefix\n");
-    printf(".global main\n");
-    
+
     LFunc *main_func;
     char main_str[] = "main";
 
@@ -670,7 +626,7 @@ int main(int argc,char **argv){
     for(int i=0;i<funcs.size();i++){
         LFunc *func = funcs[i];
         if(!memcmp(func->name,main_str,func->len)){main_func = func;continue;}
-        printf("%.*s:\n",func->len,func->name);
+        printf(".%.*s",func->len,func->name);
         // なんかしらんけどgccでリンクおこなうとバグる。16進数じゃないのが原因疑惑
         printf("    push rbp\n");
         printf("    mov rbp, rsp\n");
@@ -683,7 +639,7 @@ int main(int argc,char **argv){
     }
 
     int lvar_size = main_func->lvar_locals.size();
-    printf("%s:\n",main_str);
+    printf(".%s",main_str);
     if(lvar_size>0){
         printf("    push rbp\n");
         printf("    mov rbp, rsp\n");

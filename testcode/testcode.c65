@@ -1,28 +1,33 @@
 #やるにあたってNMI/RESETのラベルをはったときの処理をアセンブラに実装する
 
-#sound PPU init 
-sound_init(0b00000111);
-PPUcontroller_init(0b000000000,0b00000000);　// better last
-sound_ch1_init(0b00000000,0b000000000);
-sound_ch1_init(0b00000000,0b000000000);
-sound_Twave_init(0b0000);
+main(){
+    #sound PPU init 
+    sound_init(0b00000111);
+    sound_ch1_init(0b00000000,0b000000000);
+    sound_ch1_init(0b00000000,0b000000000);
+    sound_Twave_init(0b0000);
+    PPUcontroller_init(0b000000000,0b00000000);　// better last
 
-# set delay_time and sound_value 
-char *delay_time;
-char *sound_value;
+    # set delay_time and sound_value 
+    char *delay_time;
+    char *sound_value;
 
-delay_time = 0x0;
-sound_value = 0x1;
+    delay_time = 0x0;
+    sound_value = 0x1;
 
-*delay_time = 60;
-*sound_value = 0x2;
+    *delay_time = 60;
+    *sound_value = 0x2;
 
-*sound_value = 0b10101111;　　　// アセンブラでほしい
-sound_value = sound_value + 1;//いらない
-// ... こんな感じで値を入れていく
+    *sound_value = 0b10101111;　　　// アセンブラでほしい
+    sound_value = sound_value + 1;//いらない
+    // ... こんな感じで値を入れていく
 
-loop(1){}
+    while(1){
+        // continue
+    }
+}
 
-NMI{
+
+NMI(){
     
 }
