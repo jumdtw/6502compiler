@@ -1,6 +1,33 @@
 # 6502compiler
 
 ## 9ccからの移植について
+
+# ebnf
+
+program = ("int" | "double" | ...) ident ( ) { stmt* }
+
+stmt =  expr ";"
+     |  "{" stmt* "}"
+     |  "if" "(" expr ")" stmt ( "else" stmt )?
+     |  "while" "(" expr ")" stmt
+     |  "return" expr ";"
+
+expr = ("int" | "double" | ...)? assign
+
+assign =  equality ("=" assign)?
+
+equality = relational ("==" relational | "!=" relational)*
+
+relational = add ("<" add | "<=" add | ">" add | ">=" add)*
+
+add = mul ("+" mul | "-" mul)*
+
+mul = unary ("*" unary | "/" unary)*
+
+unary =  |"+"? primary | "-"? primary | "*"? unary | "&"? unary
+
+primary = num |  ident ( "(" ")" )? | "(" expr ")"
+
 ## 6502に移植
 
 前提としてスタックに計算したい値２つがあらかじめ積んである。

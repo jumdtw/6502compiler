@@ -296,9 +296,9 @@ Node *expr(){
         strncpy(buf_lvar->name,tokens[pos].str,tokens[pos].len);
         buf_lvar->len = tokens[pos].len;
         if(!locals.size()){
-            buf_lvar->offset = 8;
+            buf_lvar->offset = 0x100;
         }else{
-            buf_lvar->offset = locals[(locals.size()-1)]->offset + 8;
+            buf_lvar->offset = locals[(locals.size()-1)]->offset + 1;
         }
         locals.push_back(buf_lvar);
         return assign();
@@ -395,11 +395,6 @@ void program(){
                             while (memcmp(br,tokens[pos].str,1)){                           
                                 lcode.push_back(stmt());
                             }
-                            /*
-                            for(int i=0;i<lcode.size();i++){
-                                func->code.push_back(lcode[i]);
-                            }
-                            */
                             func->code = lcode;
                             //std::copy(lcode.begin(),lcode.end(),back_inserter(func->code));
                             // どちらもvectorのコピー　挙動が違うので今後のために残す
@@ -430,29 +425,17 @@ void program(){
 
 }
 
-void gen_lval(Node *node){
-    if(!node->ty==ND_LVAR){
-        printf("not ND_LVAR");
-        exit(1);
-    }
-    printf("    mov rax, rbp\n");
-    printf("    sub rax, %d\n",node->offset);
-    printf("    push rax\n");
-}
-
-
 void gen(Node *node){
 
     if(node->ty==ND_FUNC){
         for(int i=node->stmts.size()-1;i>=0;i--){
             Node *p = node->stmts[i];
             if(p->ty==ND_NUM){
-                printf("    push %d\n",p->val);
+                printf("    lda #$%x\n",p->val);
+                printf("    pha\n");
             }else if(p->ty==ND_LVAR){
-                gen_lval(p);
-                printf("    pop rax\n");
-                printf("    mov rax, [rax]\n");
-                printf("    push rax\n");
+                printf("    lda $%d\n",p->offset);
+                printf("    pha\n");
             }else{
                 printf("err gen code call func\n");
                 exit(1);
@@ -471,10 +454,9 @@ void gen(Node *node){
     
     if(node->ty == ND_RETURN){
         gen(node->lhs);
-        printf("    pop rax\n");
-        printf("    mov rsp, rbp\n");
-        printf("    pop rbp\n");
-        printf("    ret\n");
+        // aレジスタを返り値として設定する
+        printf("    pla\n");
+        printf("    rts\n");
         return;
     }
     
@@ -482,17 +464,19 @@ void gen(Node *node){
         srand((unsigned int)time(NULL));
         int L = rand()%10000;
         gen(node->lhs);
-        printf("    pop rax\n");
-        printf("    cmp rax, 0\n");
+        printf("    pha\n");
+        // sta だとゼロフラッグがうごかないので一回メモリに動かしてからldaしてる。ldaはゼロフラグに依存関係がある。
+        printf("    sta $0\n");
+        printf("    lda $0\n");
         
         if(node->rhs->ty==ND_ELSE){
-            printf("    je  %delse\n",L);
+            printf("    beq  %delse\n",L);
             gen(node->rhs->lhs);
             printf("    jmp %dend\n",L);
             printf(".%delse",L);
             gen(node->rhs->rhs);
         }else{
-            printf("    je  %dend\n",L);
+            printf("    beqd  %dend\n",L);
             gen(node->rhs);
         }
         printf(".%dend",L);
@@ -502,34 +486,34 @@ void gen(Node *node){
     if(node->ty == ND_WHILE){
         srand((unsigned int)time(NULL));
         int L = rand()%10000;
-        printf(".%dbegin",L);
+        printf(".%d_WHILE_begin",L);
+        //条件式
         gen(node->lhs);
-        printf("    pop rax\n");
-        printf("    cmp rax, 0\n");
-        printf("    je  %dend\n",L);
+        printf("    pha\n");
+        // sta だとゼロフラッグがうごかないので一回メモリに動かしてからldaしてる。ldaはゼロフラグに依存関係がある。
+        printf("    sta $0\n");
+        printf("    lda $0\n");
+        printf("    beq  %d_WHILE_end`\n",L);
+        //演算
         gen(node->rhs);
-        printf("    jmp %dbegin\n",L);
-        printf(".%dend",L);
+        printf("    jmp %d_WHILE_begin\n",L);
+        printf(".%d_WHILE_end",L);
         return;
     }
     
+    // ___end___
     if(node->ty == ND_NUM){
-        printf("    lda %d\n",node->val);
+        printf("    lda #$%x\n",node->val);
         printf("    pha\n");
         return;
     }else if(node->ty==ND_LVAR){
-        gen_lval(node);
-        printf("    pop rax\n");
-        printf("    mov rax, [rax]\n");
-        printf("    push rax\n");
+        printf("    lda $%x\n",node->offset);
+        printf("    pha\n");
         return;
     }else if(node->ty==ND_ASSIGN){
-        gen_lval(node->lhs);
         gen(node->rhs);
-        printf("    pop rdi\n");
-        printf("    pop rax\n");
-        printf("    mov [rax], rdi\n");
-        printf("    push rdi\n");
+        printf("    pla\n");
+        printf("    sta $%x\n",node->lhs->offset);
         return;
     }
 
@@ -545,7 +529,7 @@ void gen(Node *node){
             printf("    clc\n");
             printf("    pla\n");
             printf("    sta $0\n");
-            printf("    pla a\n");
+            printf("    pla\n");
             printf("    adc $0\n");
             break;
         case '-':
@@ -563,11 +547,12 @@ void gen(Node *node){
             printf("    sta $0\n");
             printf("    lda #$0\n");
             printf("    clc\n");
-            printf(".%d_mul_start",random);
+            printf(".%d_mul",random);
             printf("    adc $0\n");
             printf("    dex\n");
-            printf("    bne %d_mul_start\n",random);
+            printf("    bne %d_mul\n",random);
             break;
+        // 割り算だけまだ実装してないよ♡
         case '/':
             printf("    mov rdx, 0\n");
             printf("    div rdi\n");
@@ -627,11 +612,6 @@ int main(int argc,char **argv){
         LFunc *func = funcs[i];
         if(!memcmp(func->name,main_str,func->len)){main_func = func;continue;}
         printf(".%.*s",func->len,func->name);
-        // なんかしらんけどgccでリンクおこなうとバグる。16進数じゃないのが原因疑惑
-        printf("    push rbp\n");
-        printf("    mov rbp, rsp\n");
-        int lvar_size = func->lvar_locals.size();
-        printf("    sub rsp, %d\n",lvar_size*8);
         for(int k=0;k<func->code.size();k++){
             Node *code = func->code[k];
             gen(code);
@@ -640,11 +620,7 @@ int main(int argc,char **argv){
 
     int lvar_size = main_func->lvar_locals.size();
     printf(".%s",main_str);
-    if(lvar_size>0){
-        printf("    push rbp\n");
-        printf("    mov rbp, rsp\n");
-        printf("    sub rsp, %d\n",lvar_size*8);
-    }
+
 
     for(int i=0;i<main_func->code.size();i++){
         gen(main_func->code[i]);
