@@ -60,8 +60,10 @@ Node *new_node_num(int val){
     return node;
 }
 
+
 bool consume(char *op){
     if(memcmp(tokens[pos].str,op,tokens[pos].len)){
+        //printf("false %s\n",tokens[pos].str);
         return false;
     }
     pos++;
@@ -74,11 +76,10 @@ bool at_eof(){
 
 int check_func_type(int type){
     switch(type){
-        case TK_INT:
-            return ND_INT;
-        case TK_DOUBLE:
-            return ND_DOUBLE;
-
+        case TK_CHAR:
+            return ND_CHAR;
+        case TK_SHORT:
+            return ND_SHORT;
     }
     return 0;
 }
@@ -174,7 +175,6 @@ Node *primary(){
            exit(1);
         }
         pos++;
-        
         return node;
     }
 
@@ -191,10 +191,10 @@ Node *unary(){
         return new_node('-',new_node_num(0),primary());
     }
     if(consume((char*)"*")){
-        return primary();
+        return new_node(ND_POINTER,primary(),NULL);
     }
     if(consume((char*)"&")){
-        return new_node('-',new_node_num(0),primary());
+        return new_node(ND_ADDER,primary(),NULL);
     }
     Node *p = primary();
     return p;
@@ -271,14 +271,31 @@ Node *equality(){
 
 
 Node *assign(){
+    // ポインタへの代入。ただし、cpu設計的に1byteの値しか扱えないため、変数の値が0xff以下でないとダメ。
+    if(consume((char*)"*")){
+        Node *node = equality();
+        if(consume((char*)"=")){
+            node = new_node(ND_POINTER_ASSIGN,node,assign());
+        }
+        return node;
+    }
+    // 0xffより上の値のメモリに代入したい時にはこちらが使われる。
+    if(consume((char*)"[")){
+        Node *node = (Node*)malloc(sizeof(Node));
+        node->ty = ND_POINTER_ASSGIN_ABS;
+        if(consume((char*)"]")){
+            if(consume((char*)"=")){
+                node = new_node(ND_POINTER_ASSIGN_ABS,node,assign());
+            }
+            return node;
+        }
+    }
 
     Node *node = equality();
     if(consume((char*)"=")){
         node = new_node(ND_ASSIGN,node,assign());
     }
-
     return node;
-
 }
 
 Node *expr(){
@@ -286,17 +303,17 @@ Node *expr(){
     // 変数宣言
     if(check_func_type(tokens[pos].ty)){
         // 型種類処理
+        // 変数登録
         pos++;
         if(tokens[pos].ty!=TK_IDENT){
             printf("error expr. ident tokens not found.");
         }
-        // 変数登録
         LVar *buf_lvar = (LVar*)malloc(sizeof(LVar));
         buf_lvar->name = (char*)malloc(sizeof(char)*tokens[pos].len);
         strncpy(buf_lvar->name,tokens[pos].str,tokens[pos].len);
         buf_lvar->len = tokens[pos].len;
         if(!locals.size()){
-            buf_lvar->offset = 0x100;
+            buf_lvar->offset = 0x200;
         }else{
             buf_lvar->offset = locals[(locals.size()-1)]->offset + 1;
         }
@@ -304,7 +321,8 @@ Node *expr(){
         return assign();
     }else{
         // 変数宣言でない処理。
-        Node *p = assign();
+        Node *p = (Node*)malloc(sizeof(Node));
+        p = assign();
         return p;
     }
 }
@@ -330,7 +348,8 @@ Node *stmt(){
             node->ty = ND_IF;
             node->lhs = expr();
             if(consume((char*)")")){
-                Node *else_node = stmt();
+                Node *else_node = (Node*)malloc(sizeof(Node));
+                else_node = stmt();
                 if(tokens[pos].ty==TK_ELSE){
                     pos++;
                     node->rhs = new_node(ND_ELSE,else_node,stmt());
@@ -347,8 +366,10 @@ Node *stmt(){
         if(consume((char*)"(")){
             node = (Node*)malloc(sizeof(Node));
             node->ty = ND_WHILE;
+            node->lhs = (Node*)malloc(sizeof(Node));
             node->lhs = expr();
             if(consume((char*)")")){
+                node->rhs = (Node*)malloc(sizeof(Node));
                 node->rhs = stmt();
                 return node; 
             }
@@ -358,12 +379,15 @@ Node *stmt(){
     if(consume((char*)"{")){
         node = (Node*)malloc(sizeof(Node));
         node->ty = ND_BLOCK;
+        std::vector<Node*> buf_vector;
         while(!consume((char*)"}")){
-            node->stmts.push_back(stmt());
+            Node *buf_node = (Node*)malloc(sizeof(Node));
+            buf_node = stmt();
+            buf_vector.push_back(buf_node);
         }
+        node->stmts = buf_vector;
         return node;
     }
-    
     
     node = expr();
     expect((char*)";");
@@ -384,7 +408,9 @@ void program(){
         // 関数本体
             if(tokens[pos].ty==TK_IDENT){
                 //関数名取得
-                func->name = tokens[pos].str;
+                func->name = (char*)malloc(tokens[pos].len+1);
+                strncpy(func->name,tokens[pos].str,tokens[pos].len+1);
+                //func->name = tokens[pos].str;
                 func->len = tokens[pos].len;
                 pos++;
                 if(consume((char*)"(")){
@@ -398,17 +424,14 @@ void program(){
                             func->code = lcode;
                             //std::copy(lcode.begin(),lcode.end(),back_inserter(func->code));
                             // どちらもvectorのコピー　挙動が違うので今後のために残す
-                            func->lvar_locals = locals;
-                            /*
+                            //func->lvar_locals = locals;
                             for(int i=0;i<locals.size();i++){
                                 func->lvar_locals.push_back(locals[i]);
                             }
-                            */
                             //std::copy(locals.begin(),locals.end(),back_inserter(func->lvar_locals));
                             //locals vector のreset
                             std::vector<LVar*> buf;
                             locals = buf;
-                            
                             funcs.push_back(func);
                             pos++;
                             continue;
@@ -427,6 +450,17 @@ void program(){
 
 void gen(Node *node){
 
+    if(node->ty==ND_POINTER){
+        printf("    ldx #$0\n");
+        printf("    lda [#$%x]\n",node->lhs->offset);
+        printf("    pha\n");
+    }
+
+    if(node->ty==ND_ADDER){
+        printf("    lda #$%x\n",node->lhs->offset);
+        printf("    pha\n");
+    }
+           
     if(node->ty==ND_FUNC){
         for(int i=node->stmts.size()-1;i>=0;i--){
             Node *p = node->stmts[i];
@@ -464,7 +498,7 @@ void gen(Node *node){
         srand((unsigned int)time(NULL));
         int L = rand()%10000;
         gen(node->lhs);
-        printf("    pha\n");
+        printf("    pla\n");
         // sta だとゼロフラッグがうごかないので一回メモリに動かしてからldaしてる。ldaはゼロフラグに依存関係がある。
         printf("    sta $0\n");
         printf("    lda $0\n");
@@ -476,7 +510,7 @@ void gen(Node *node){
             printf(".%delse",L);
             gen(node->rhs->rhs);
         }else{
-            printf("    beqd  %dend\n",L);
+            printf("    beq  %dend\n",L);
             gen(node->rhs);
         }
         printf(".%dend",L);
@@ -493,15 +527,15 @@ void gen(Node *node){
         // sta だとゼロフラッグがうごかないので一回メモリに動かしてからldaしてる。ldaはゼロフラグに依存関係がある。
         printf("    sta $0\n");
         printf("    lda $0\n");
-        printf("    beq  %d_WHILE_end`\n",L);
+        printf("    beq  %d_WHILE_end\n",L);
         //演算
         gen(node->rhs);
         printf("    jmp %d_WHILE_begin\n",L);
         printf(".%d_WHILE_end",L);
         return;
     }
-    
-    // ___end___
+
+
     if(node->ty == ND_NUM){
         printf("    lda #$%x\n",node->val);
         printf("    pha\n");
@@ -510,12 +544,26 @@ void gen(Node *node){
         printf("    lda $%x\n",node->offset);
         printf("    pha\n");
         return;
-    }else if(node->ty==ND_ASSIGN){
+    }else if(node->ty==ND_ASSIGN){ 
         gen(node->rhs);
         printf("    pla\n");
         printf("    sta $%x\n",node->lhs->offset);
         return;
+    }else if(node->ty==ND_POINTER_ASSIGN){ // この代入ポインタの値は0xff以下であるという前提である。
+        printf("    lda $%x\n",node->lhs->offset);
+        printf("    sta $0\n");
+        printf("    ldx $0\n");
+        gen(node->rhs);
+        printf("    pla\n");
+        printf("    sta [#$00]\n");
+        return;
     }
+
+    // pointer との違い
+    /*
+    普通の assign は普通に変数のoffsetの所に値を入れるが
+    pointer_assignは変数の値をoffsetと考えその部分に値を入れる。
+    */
 
     gen(node->lhs);
     gen(node->rhs);
@@ -536,7 +584,7 @@ void gen(Node *node){
             printf("    sec\n");
             printf("    pla\n");
             printf("    sta $0\n");
-            printf("    pla a\n");
+            printf("    pla\n");
             printf("    sbc $0\n");
             break;
         case '*':
@@ -559,24 +607,68 @@ void gen(Node *node){
             break;
 
         case ND_SETE: // == 
-            printf("    cmp rax, rdi\n");
-            printf("    sete al\n");
-            printf("    movzb rax, al\n");
+            printf("    sec\n");
+            printf("    pla\n");
+            printf("    sta $0\n");
+            printf("    pla\n");
+            printf("    sbc $0\n");
+
+            printf("    beq %d_set_1\n",random);
+
+            printf(".%d_set_0",random);
+            printf("    lda #$0\n");
+            printf("    pha\n");
+            printf("    jmp %d_sete_end",random);
+            printf(".%d_set_1",random);
+            printf("    lda #$1\n");
+            printf("    pha\n");
+
+            printf(".%d_sete_end",random);
             break;
+
         case ND_SETL:  // <
-            printf("    cmp rax, rdi\n");
-            printf("    setl al\n");
-            printf("    movzb rax, al\n");
+            printf("    sec\n");
+            printf("    pla\n");
+            printf("    sta $0\n");
+            printf("    pla\n");
+            printf("    sbc $0\n");
+
+            printf("    bmi %d_set_1\n",random);
+
+            printf(".%d_set_0",random);
+            printf("    lda #$0\n");
+            printf("    pha\n");
+            printf("    jmp %d_sete_end",random);
+            printf(".%d_set_1",random);
+            printf("    lda #$1\n");
+            printf("    pha\n");
+
+            printf(".%d_sete_end",random);
             break;
+        // とりあえず実装しない。
         case ND_SETLE: // <=
             printf("    cmp rax, rdi\n");
             printf("    setle al\n");
             printf("    movzb rax, al\n");
             break;
         case ND_SETNE: // !=
-            printf("    cmp rax, rdi\n");
-            printf("    setne al\n");
-            printf("    movzb rax, al\n");
+            printf("    sec\n");
+            printf("    pla\n");
+            printf("    sta $0\n");
+            printf("    pla\n");
+            printf("    sbc $0\n");
+
+            printf("    bne %d_set_1\n",random);
+
+            printf(".%d_set_0",random);
+            printf("    lda #$0\n");
+            printf("    pha\n");
+            printf("    jmp %d_sete_end",random);
+            printf(".%d_set_1",random);
+            printf("    lda #$1\n");
+            printf("    pha\n");
+
+            printf(".%d_sete_end",random);
             break;
     }
 
@@ -602,8 +694,6 @@ int main(int argc,char **argv){
     }
     */
     program();
-    
-
     LFunc *main_func;
     char main_str[] = "main";
 
@@ -618,10 +708,7 @@ int main(int argc,char **argv){
         }
     }
 
-    int lvar_size = main_func->lvar_locals.size();
     printf(".%s",main_str);
-
-
     for(int i=0;i<main_func->code.size();i++){
         gen(main_func->code[i]);
     }

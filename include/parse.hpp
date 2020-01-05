@@ -6,8 +6,12 @@
 
 enum{
     ND_NUM = 4334,
+    ND_POINTER,
+    ND_ADDER,
     // 比較演算
     ND_ASSIGN,
+    ND_POINTER_ASSIGN, // 0xff以下
+    ND_POINTER_ASSGIN_ABS, // 0xffより上（別に0xff以下でも使える）
     ND_RETURN,
     ND_IF,
     ND_ELSE,
@@ -16,10 +20,8 @@ enum{
     ND_FUNC_DEFINE,
     ND_LVAR,
     ND_BLOCK,
-    ND_INT,
-    ND_DOUBLE,
-    ND_ADDR, //&
-    ND_DEREF,//* アドレス参照
+    ND_CHAR,
+    ND_SHORT,
     ND_SETE,  // ==
     ND_SETL,  // <
     ND_SETLE, // <=
@@ -37,9 +39,9 @@ struct Node{
     int val;
     int offset;
     int len;
-    std::vector<Node*> stmts;
     Node *lhs;
     Node *rhs;
+    std::vector<Node*> stmts;
     char *str;
 };
 
@@ -54,6 +56,7 @@ struct LVar{
 };
 
 struct LFunc{
+    
     int type;  // 関数の型
     int len;
     // 構文木がここにはいっている
@@ -63,5 +66,10 @@ struct LFunc{
     char *name;
 
 };
+
+// ローカル関数リスト
+extern std::vector<LVar*> locals;
+// 関数リスト
+extern std::vector<LFunc*> funcs;
 
 #endif 

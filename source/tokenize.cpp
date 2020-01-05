@@ -118,11 +118,20 @@ void tokenize(char *p){
             continue;
         }
 
-        // intの判別
-        if(strncmp(p,"int",3)==0&&!is_alnum(p[3])){
-            token.ty = TK_INT;
+        // charの判別
+        if(strncmp(p,"char",4)==0&&!is_alnum(p[4])){
+            token.ty = TK_CHAR;
             token.str = p;
-            p+=3;
+            p+=4;
+            tokens.push_back(token);
+            continue;
+        }
+
+        // shortの判別
+        if(strncmp(p,"short",5)==0&&!is_alnum(p[5])){
+            token.ty = TK_SHORT;
+            token.str = p;
+            p+=5;
             tokens.push_back(token);
             continue;
         }

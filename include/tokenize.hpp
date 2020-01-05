@@ -11,8 +11,7 @@ enum {
     TK_ELSE,
     TK_WHILE,
     // 変数の型
-    TK_INT,    // int 
-    TK_DOUBLE, // double
+    TK_SHORT, // short
     TK_CHAR,   // char
     TK_IDENT,     // 識別子　変数の名前とか
     // 比較演算子
