@@ -19,6 +19,9 @@ enum {
     TK_SETL,  // <
     TK_SETLE, // <=
     TK_SETNE, // !=
+    // 進数　base number
+    TK_HEX,
+    TK_BIN,
     TK_EOF,        //入力の終わりを表すトークン
 };
 

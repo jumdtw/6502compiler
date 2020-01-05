@@ -2,6 +2,7 @@
 #include<stdio.h>
 #include<string.h>
 #include<stdlib.h>
+#include<iostream>
 #include "../include/tokenize.hpp"
 
 
@@ -30,7 +31,7 @@ int is_alnum(char c){
 void tokenize(char *p){
     int i = 0;
     Token end;
-    char sete[] = "==",setne[] = "!=",setle[] = "<=",setle_re[] = ">=";
+    char sete[] = "==",setne[] = "!=",setle[] = "<=",setle_re[] = ">=",hex[] = "0x",bin[] = "0b";
     while(*p){
         Token token;
         //空白文字をスキップ
@@ -38,6 +39,27 @@ void tokenize(char *p){
             p++;
             continue;
         }
+
+        // 0xの判別
+        if(!memcmp(hex,p,2)){
+            p+=2;
+            token.ty = TK_NUM;
+            token.str = p;
+            token.val = strtol(p,&p,16);
+            tokens.push_back(token);
+            continue;
+        }
+
+        // 0bの判別
+        if(!memcmp(bin,p,2)){
+            p+=2;
+            token.ty = TK_NUM;
+            token.str = p;
+            token.val = strtol(p,&p,2);
+            tokens.push_back(token);
+            continue;
+        }
+
         // arr1 == arr2 の時の戻り値が０
         // == 
         if(!memcmp(sete,p,2)){    
@@ -67,7 +89,7 @@ void tokenize(char *p){
             continue;
         }
         
-        if(*p == '(' || *p == ')' || *p=='+' || *p=='-' || *p=='*' || *p=='/' || *p=='<' || *p=='>' || *p=='=' || *p == ';' || *p=='{' || *p=='}' || *p==',' || *p=='&'){    
+        if(*p == '(' || *p == ')' || *p=='+' || *p=='-' || *p=='*' || *p=='/' || *p=='<' || *p=='>' || *p=='=' || *p == ';' || *p=='{' || *p=='}' || *p==',' || *p=='&' || *p=='[' || *p==']'){    
             token.ty = *p;
             token.str = p;
             token.len = 1;
@@ -75,6 +97,9 @@ void tokenize(char *p){
             p++;
             continue;
         }
+
+
+
         //10進数の数字であるか否か
         if(isdigit(*p)){
             token.ty = TK_NUM;
@@ -135,6 +160,8 @@ void tokenize(char *p){
             tokens.push_back(token);
             continue;
         }
+
+
         
         //変数の判別
         if('a' <= *p && *p <= 'z'){

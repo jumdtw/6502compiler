@@ -282,12 +282,17 @@ Node *assign(){
     // 0xffより上の値のメモリに代入したい時にはこちらが使われる。
     if(consume((char*)"[")){
         Node *node = (Node*)malloc(sizeof(Node));
-        node->ty = ND_POINTER_ASSGIN_ABS;
+        // とりあえず入れてる。別になくてもいい。
+        node->ty = ND_NUM;
+        node->val = tokens[pos].val;
+        pos++;
         if(consume((char*)"]")){
             if(consume((char*)"=")){
                 node = new_node(ND_POINTER_ASSIGN_ABS,node,assign());
+                return node;
             }
-            return node;
+            printf("error pointer assign abs\n");
+            exit(1);
         }
     }
 
@@ -303,12 +308,14 @@ Node *expr(){
     // 変数宣言
     if(check_func_type(tokens[pos].ty)){
         // 型種類処理
+        LVar *buf_lvar = (LVar*)malloc(sizeof(LVar));
+        buf_lvar->lvar_type = (Type*)malloc(sizeof(Type));
+        buf_lvar->lvar_type->type = check_func_type(tokens[pos].ty);
         // 変数登録
         pos++;
         if(tokens[pos].ty!=TK_IDENT){
             printf("error expr. ident tokens not found.");
         }
-        LVar *buf_lvar = (LVar*)malloc(sizeof(LVar));
         buf_lvar->name = (char*)malloc(sizeof(char)*tokens[pos].len);
         strncpy(buf_lvar->name,tokens[pos].str,tokens[pos].len);
         buf_lvar->len = tokens[pos].len;
@@ -403,7 +410,8 @@ void program(){
         // 関数の型処理
         if(check_func_type(tokens[pos].ty)){
             LFunc *func = (LFunc*)malloc(sizeof(LFunc));
-            func->type = check_func_type(tokens[pos].ty);
+            func->lvar_type = (Type*)malloc(sizeof(Type));
+            func->lvar_type->type = check_func_type(tokens[pos].ty);
             pos++;
         // 関数本体
             if(tokens[pos].ty==TK_IDENT){
@@ -557,6 +565,11 @@ void gen(Node *node){
         printf("    pla\n");
         printf("    sta [#$00]\n");
         return;
+    }else if(node->ty==ND_POINTER_ASSIGN_ABS){ // この代入ポインタの値は0xff以下であるという前提である。
+        gen(node->rhs);
+        printf("    pla\n");
+        printf("    sta $%x\n",node->lhs->val);
+        return;
     }
 
     // pointer との違い
@@ -687,10 +700,12 @@ int main(int argc,char **argv){
     tokenize(argv[1]);
     /*
     for(int i=0;i<tokens.size();i++){
+        std::cout << "------------------------" << std::endl;
         printf("ty -> %d\n",tokens[i].ty);
         printf("val -> %d\n",tokens[i].val);
         printf("str -> %s\n",tokens[i].str);
         printf("len -> %d\n",tokens[i].len);
+        std::cout << "------------------------" << std::endl;
     }
     */
     program();
