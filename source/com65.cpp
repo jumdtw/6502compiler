@@ -141,7 +141,7 @@ Node *primary(){
     if(consume((char*)"{")){
         Node *node = (Node*)malloc(sizeof(Node));
         Node *buf = (Node*)malloc(sizeof(Node));
-        node->ty = ND_ARRAY;
+        node->ty = ND_IMM_ARRAY;
         node->lhs = buf;
         int len = 0;
         while(1){
@@ -194,11 +194,11 @@ Node *primary(){
         pos++;
         // 配列か否かの判定
         if(consume((char*)"[")){
-            
+            node->ty = ND_ARRAY;
             if(tokens[pos].ty!=TK_NUM){std::cout<<"error array size primary"<<std::endl;exit(1);}
+            node->lhs = primary();
             lvar->lvar_type->array_size = tokens[pos].val;
             node->val = tokens[pos].val;
-            pos++;
             if(!consume((char*)"]")){
                 std::cout<<"error array miss ']' "<<std::endl;
                 exit(1);
@@ -362,14 +362,13 @@ Node *expr(){
         strncpy(buf_lvar->name,tokens[pos].str,tokens[pos].len);
         buf_lvar->len = tokens[pos].len;
         if(!locals.size()){
-            buf_lvar->offset = 0x200;
+            buf_lvar->offset = 0x206;
         }else{
             if(locals[(locals.size()-1)]->lvar_type->array_size>0){
                 buf_lvar->offset = locals[(locals.size()-1)]->offset + locals[(locals.size()-1)]->lvar_type->array_size;
             }else{
                 buf_lvar->offset = locals[(locals.size()-1)]->offset + 1;
             }
-            
         }
         locals.push_back(buf_lvar);
         return assign();
@@ -597,6 +596,14 @@ void gen(Node *node){
         printf("    pha\n");
         return;
     }else if(node->ty==ND_ARRAY){
+        gen(node->lhs);
+        printf("    pla\n");
+        printf("    sta $0\n");
+        printf("    ldx $0\n");
+        printf("    lda [#$%x]\n",node->offset);
+        printf("    pha\n");
+        return;
+    }else if(node->ty==ND_IMM_ARRAY){
         Node *buf = node->lhs;
         for(int i=0;i<node->val;i++){
             printf("    lda #$%x\n",buf->val);

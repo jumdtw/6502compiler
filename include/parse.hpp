@@ -6,7 +6,7 @@
 
 enum{
     ND_NUM = 4334,
-    ND_ARRAY,
+    ND_IMM_ARRAY,
     ND_POINTER,
     ND_ADDER,
     // 比較演算
@@ -20,6 +20,7 @@ enum{
     ND_FUNC,
     ND_FUNC_DEFINE,
     ND_LVAR,
+    ND_ARRAY,
     ND_BLOCK,
     ND_CHAR,
     ND_SHORT,
