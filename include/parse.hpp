@@ -6,6 +6,7 @@
 
 enum{
     ND_NUM = 4334,
+    ND_ARRAY,
     ND_POINTER,
     ND_ADDER,
     // 比較演算
@@ -35,14 +36,13 @@ typedef struct LFunc LFunc;
 typedef struct Type Type;
 
 struct Node{
-
     int ty;
     int val;
     int offset;
     int len;
+    std::vector<Node*> stmts;
     Node *lhs;
     Node *rhs;
-    std::vector<Node*> stmts;
     char *str;
 };
 
@@ -53,22 +53,21 @@ struct Type{
 };
 
 struct LVar{
+    Type *lvar_type;  // 変数の型
     char *name; //変数名
     int len;    //name.len()
     int val;
     int offset; //
-    Type *lvar_type;  // 変数の型
 };
 
 struct LFunc{
+    Type *lvar_type;  // 関数の型
     int len;
     // 構文木がここにはいっている
     std::vector<Node*> code;
     // ローカル変数リスト
     std::vector<LVar*> lvar_locals;
     char *name;
-    Type *lvar_type;  // 関数の型
-
 };
 
 // ローカル関数リスト

@@ -12,7 +12,7 @@ stmt =  expr ";"
 
 expr = ("int" | "double" | ...)? assign
 
-assign = ("*"? equality | \[ 即値 \] )?("=" assign)?
+assign = ("*"? equality | \[ num \] )?("=" assign)?
 
 equality = relational ("==" relational | "!=" relational)*
 
@@ -24,7 +24,7 @@ mul = unary ("*" unary | "/" unary)*
 
 unary =  |"+"? primary | "-"? primary | "*"? unary | "&"? unary | "0x"? unary | "0b"? unary
 
-primary = num |  ident ( "()" | "[]" )? | "(" expr ")"
+primary = num |  ident ( "( num )" | "\[ num \]" )? | "(" expr ")" | { "(num)"* ','? } 
   
 ## 6502に移植
 

@@ -1,10 +1,10 @@
 
-#include<stdio.h>
-#include<stdlib.h>
-#include<string.h>
-#include<time.h>
-#include<vector>
-#include<iostream>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <vector>
+#include <iostream>
 #include"../include/tokenize.hpp"
 #include"../include/parse.hpp"
 
@@ -21,10 +21,10 @@ std::vector<Token> tokens;
 int pos = 0;
 
 
-LVar *find_lvar(Token *tok){
+LVar *find_lvar(char *str,int len){
     for(int i=0;i<locals.size();i++){
         LVar *local = locals[i];
-        if(local->len==tok->len&&!memcmp(tok->str,local->name,local->len)){
+        if(local->len==len&&!memcmp(str,local->name,local->len)){
             return local;
         }
     }
@@ -96,7 +96,7 @@ std::vector<Node*> call_arrgument(){
     std::vector<Node*> stmts;
     char cr[] = ")",com[] = ",";
     while(memcmp(tokens[pos].str,cr,1)){
-        LVar *arrgu = find_lvar(&tokens[pos]);
+        LVar *arrgu = find_lvar(tokens[pos].str,tokens[pos].len);
         if(arrgu){
             // 変数だった時の処理
             Node *buf;
@@ -138,6 +138,26 @@ Node *primary(){
         }
     }
 
+    if(consume((char*)"{")){
+        Node *node = (Node*)malloc(sizeof(Node));
+        Node *buf = (Node*)malloc(sizeof(Node));
+        node->ty = ND_ARRAY;
+        node->lhs = buf;
+        int len = 0;
+        while(1){
+            if(tokens[pos].ty!=TK_NUM){std::cout<<"error not num array primary"<<std::endl;exit(1);}
+            buf->val = tokens[pos].val;
+            buf->lhs = (Node*)malloc(sizeof(Node));
+            buf = buf->lhs;
+            len++;
+            pos++;
+            if(consume((char*)"}")){break;}
+            pos++;
+        }
+        node->val = len;
+        return node;
+    }
+
     if(tokens[pos].ty == TK_NUM){
         return new_node_num(tokens[pos++].val);
     }
@@ -167,14 +187,34 @@ Node *primary(){
 
         // 変数呼び出し
         node->ty = ND_LVAR;
-        LVar *lvar = find_lvar(&tokens[pos]);
+        node->str = (char*)malloc(sizeof(char));
+        node->str = tokens[pos].str;
+        node->len = tokens[pos].len;
+        LVar *lvar = find_lvar(tokens[pos].str,tokens[pos].len);
+        pos++;
+        // 配列か否かの判定
+        if(consume((char*)"[")){
+            
+            if(tokens[pos].ty!=TK_NUM){std::cout<<"error array size primary"<<std::endl;exit(1);}
+            lvar->lvar_type->array_size = tokens[pos].val;
+            node->val = tokens[pos].val;
+            pos++;
+            if(!consume((char*)"]")){
+                std::cout<<"error array miss ']' "<<std::endl;
+                exit(1);
+            }
+            
+        }else{
+            lvar->lvar_type->array_size = 0;
+            node->val = 0;
+        }
+        // ノードにオフセットを入れる
         if(lvar){
             node->offset = lvar->offset;
         }else{
            printf("not found lvar %s\n",tokens[pos].str);
            exit(1);
         }
-        pos++;
         return node;
     }
 
@@ -300,6 +340,7 @@ Node *assign(){
     if(consume((char*)"=")){
         node = new_node(ND_ASSIGN,node,assign());
     }
+
     return node;
 }
 
@@ -316,13 +357,19 @@ Node *expr(){
         if(tokens[pos].ty!=TK_IDENT){
             printf("error expr. ident tokens not found.");
         }
+        // 変数の名前
         buf_lvar->name = (char*)malloc(sizeof(char)*tokens[pos].len);
         strncpy(buf_lvar->name,tokens[pos].str,tokens[pos].len);
         buf_lvar->len = tokens[pos].len;
         if(!locals.size()){
             buf_lvar->offset = 0x200;
         }else{
-            buf_lvar->offset = locals[(locals.size()-1)]->offset + 1;
+            if(locals[(locals.size()-1)]->lvar_type->array_size>0){
+                buf_lvar->offset = locals[(locals.size()-1)]->offset + locals[(locals.size()-1)]->lvar_type->array_size;
+            }else{
+                buf_lvar->offset = locals[(locals.size()-1)]->offset + 1;
+            }
+            
         }
         locals.push_back(buf_lvar);
         return assign();
@@ -437,6 +484,7 @@ void program(){
                                 func->lvar_locals.push_back(locals[i]);
                             }
                             //std::copy(locals.begin(),locals.end(),back_inserter(func->lvar_locals));
+                            
                             //locals vector のreset
                             std::vector<LVar*> buf;
                             locals = buf;
@@ -548,14 +596,29 @@ void gen(Node *node){
         printf("    lda #$%x\n",node->val);
         printf("    pha\n");
         return;
+    }else if(node->ty==ND_ARRAY){
+        Node *buf = node->lhs;
+        for(int i=0;i<node->val;i++){
+            printf("    lda #$%x\n",buf->val);
+            printf("    pha\n");
+            buf = buf->lhs;
+        }
+        return;
     }else if(node->ty==ND_LVAR){
-        printf("    lda $%x\n",node->offset);
+        printf("    lda $%x\n",node->offset + node->val);
         printf("    pha\n");
         return;
     }else if(node->ty==ND_ASSIGN){ 
         gen(node->rhs);
-        printf("    pla\n");
-        printf("    sta $%x\n",node->lhs->offset);
+        if(node->lhs->val<=0){
+            printf("    pla\n");
+            printf("    sta $%x\n",node->lhs->offset);
+            return;
+        }
+        for(int i=node->lhs->val-1;i>=0;i--){
+            printf("    pla\n");
+            printf("    sta $%x\n",node->lhs->offset+i);
+        }
         return;
     }else if(node->ty==ND_POINTER_ASSIGN){ // この代入ポインタの値は0xff以下であるという前提である。
         printf("    lda $%x\n",node->lhs->offset);
