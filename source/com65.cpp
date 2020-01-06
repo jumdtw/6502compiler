@@ -10,7 +10,7 @@
 
 Node *expr();
 Node *stmt();
-
+Node *add();
 
 // ローカル関数リスト
 std::vector<LVar*> locals;
@@ -195,7 +195,7 @@ Node *primary(){
         // 配列か否かの判定
         if(consume((char*)"[")){
             node->ty = ND_ARRAY;
-            node->lhs = primary();
+            node->lhs = add();
             lvar->lvar_type->array_size = tokens[pos].val;
             node->val = tokens[pos].val;
             if(!consume((char*)"]")){

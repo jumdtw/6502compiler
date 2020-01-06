@@ -24,7 +24,7 @@ mul = unary ("*" unary | "/" unary)*
 
 unary =  |"+"? primary | "-"? primary | "*"? unary | "&"? unary | "0x"? unary | "0b"? unary
 
-primary = num |  ident ( "( num )" | "\[ num \]" )? | "(" expr ")" | { "(num)"* ','? } 
+primary = num |  ident ( "( num )" | "\[ add \]" )? | "(" expr ")" | { "(num)"* ','? } 
   
 ## 6502に移植
 
