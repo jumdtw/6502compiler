@@ -195,7 +195,6 @@ Node *primary(){
         // 配列か否かの判定
         if(consume((char*)"[")){
             node->ty = ND_ARRAY;
-            if(tokens[pos].ty!=TK_NUM){std::cout<<"error array size primary"<<std::endl;exit(1);}
             node->lhs = primary();
             lvar->lvar_type->array_size = tokens[pos].val;
             node->val = tokens[pos].val;
