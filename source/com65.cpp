@@ -5,8 +5,9 @@
 #include <time.h>
 #include <vector>
 #include <iostream>
-#include"../include/tokenize.hpp"
-#include"../include/parse.hpp"
+#include "../include/tokenize.hpp"
+#include "../include/parse.hpp"
+#include "../include/file_controller.hpp"
 
 Node *expr();
 Node *stmt();
@@ -230,7 +231,9 @@ Node *unary(){
         return new_node('-',new_node_num(0),primary());
     }
     if(consume((char*)"*")){
-        return new_node(ND_POINTER,primary(),NULL);
+        Node *buf = primary();
+        buf->ty = ND_POINTER;
+        return buf;
     }
     if(consume((char*)"&")){
         return new_node(ND_ADDER,primary(),NULL);
@@ -314,7 +317,7 @@ Node *assign(){
     if(consume((char*)"*")){
         Node *node = equality();
         if(consume((char*)"=")){
-            node = new_node(ND_POINTER_ASSIGN,node,assign());
+            node = new_node(ND_POINTER_ASSIGN,node,equality());
         }
         return node;
     }
@@ -337,7 +340,7 @@ Node *assign(){
 
     Node *node = equality();
     if(consume((char*)"=")){
-        node = new_node(ND_ASSIGN,node,assign());
+        node = new_node(ND_ASSIGN,node,equality());
     }
 
     return node;
@@ -471,21 +474,23 @@ void program(){
                     if(consume((char*)")")){
                         if(consume((char*)"{")){
                             std::vector<Node*> lcode;
-                            while (memcmp(br,tokens[pos].str,1)){                           
+                            while (memcmp(br,tokens[pos].str,1)){                         
                                 lcode.push_back(stmt());
                             }
                             func->code = lcode;
                             //std::copy(lcode.begin(),lcode.end(),back_inserter(func->code));
                             // どちらもvectorのコピー　挙動が違うので今後のために残す
                             //func->lvar_locals = locals;
+                            /*
                             for(int i=0;i<locals.size();i++){
                                 func->lvar_locals.push_back(locals[i]);
                             }
+                            */
                             //std::copy(locals.begin(),locals.end(),back_inserter(func->lvar_locals));
                             
                             //locals vector のreset
-                            std::vector<LVar*> buf;
-                            locals = buf;
+                            //std::vector<LVar*> buf;
+                            //locals = buf;
                             funcs.push_back(func);
                             pos++;
                             continue;
@@ -505,14 +510,16 @@ void program(){
 void gen(Node *node){
 
     if(node->ty==ND_POINTER){
-        printf("    ldx #$0\n");
-        printf("    lda [#$%x]\n",node->lhs->offset);
+        printf("    ldx $%x\n",node->offset);
+        printf("    lda [#$00]\n");
         printf("    pha\n");
+        return;
     }
 
     if(node->ty==ND_ADDER){
         printf("    lda #$%x\n",node->lhs->offset);
         printf("    pha\n");
+        return;
     }
            
     if(node->ty==ND_FUNC){
@@ -577,7 +584,7 @@ void gen(Node *node){
         printf(".%d_WHILE_begin",L);
         //条件式
         gen(node->lhs);
-        printf("    pha\n");
+        printf("    pla\n");
         // sta だとゼロフラッグがうごかないので一回メモリに動かしてからldaしてる。ldaはゼロフラグに依存関係がある。
         printf("    sta $0\n");
         printf("    lda $0\n");
@@ -611,7 +618,7 @@ void gen(Node *node){
         }
         return;
     }else if(node->ty==ND_LVAR){
-        printf("    lda $%x\n",node->offset + node->val);
+        printf("    lda $%x\n",node->offset);
         printf("    pha\n");
         return;
     }else if(node->ty==ND_ASSIGN){ 
@@ -627,11 +634,9 @@ void gen(Node *node){
         }
         return;
     }else if(node->ty==ND_POINTER_ASSIGN){ // この代入ポインタの値は0xff以下であるという前提である。
-        printf("    lda $%x\n",node->lhs->offset);
-        printf("    sta $0\n");
-        printf("    ldx $0\n");
         gen(node->rhs);
         printf("    pla\n");
+        printf("    ldx $%x\n",node->lhs->offset);
         printf("    sta [#$00]\n");
         return;
     }else if(node->ty==ND_POINTER_ASSIGN_ABS){ // この代入ポインタの値は0xff以下であるという前提である。
@@ -744,11 +749,11 @@ void gen(Node *node){
 
             printf(".%d_set_0",random);
             printf("    lda #$0\n");
-            printf("    pha\n");
-            printf("    jmp %d_sete_end",random);
+            //printf("    pha\n");
+            printf("    jmp %d_sete_end\n",random);
             printf(".%d_set_1",random);
             printf("    lda #$1\n");
-            printf("    pha\n");
+            //printf("    pha\n");
 
             printf(".%d_sete_end",random);
             break;
@@ -765,8 +770,11 @@ int main(int argc,char **argv){
         return 1;
     }
     
+    char *code = read_file(argv[1]);
+
     //トークンナイズ
-    tokenize(argv[1]);
+    tokenize(code);
+            
     /*
     for(int i=0;i<tokens.size();i++){
         std::cout << "------------------------" << std::endl;
@@ -790,6 +798,7 @@ int main(int argc,char **argv){
             Node *code = func->code[k];
             gen(code);
         }
+        printf("\n");
     }
 
     printf(".%s",main_str);

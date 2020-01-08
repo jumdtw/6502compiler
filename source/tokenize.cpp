@@ -35,7 +35,7 @@ void tokenize(char *p){
     while(*p){
         Token token;
         //空白文字をスキップ
-        if(isspace(*p)||*p=='\n'){
+        if(isspace(*p)||*p=='\n'||*p=='\t'){
             p++;
             continue;
         }
@@ -164,7 +164,7 @@ void tokenize(char *p){
 
         
         //変数の判別
-        if('a' <= *p && *p <= 'z'){
+        if('a' <= *p && *p <= 'z' || 'A' <= *p && *p <= 'Z'){
             token.ty = TK_IDENT;
             token.str = p;
             token.len = lvar_len(p);
