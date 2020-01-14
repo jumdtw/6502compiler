@@ -10,6 +10,7 @@ enum {
     TK_IF,
     TK_ELSE,
     TK_WHILE,
+    TK_LOOP,
     // 変数の型
     TK_SHORT, // short
     TK_CHAR,   // char

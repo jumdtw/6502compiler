@@ -9,6 +9,7 @@ stmt =  expr ";"
      |  "if" "(" expr ")" stmt ( "else" stmt )?
      |  "while" "(" expr ")" stmt
      |  "return" expr ";"
+     |  "loop" ";"
 
 expr = ("int" | "double" | ...)? assign
 

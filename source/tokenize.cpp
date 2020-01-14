@@ -109,6 +109,15 @@ void tokenize(char *p){
             continue;
         }
 
+        // loop文の判別
+        if(strncmp(p,"loop",4)==0&&!is_alnum(p[4])){
+            token.ty = TK_LOOP;
+            token.str = p;
+            p+=4;
+            tokens.push_back(token);
+            continue;
+        }
+
         // return文の判別
         if(strncmp(p,"return",6)==0&&!is_alnum(p[6])){
             token.ty = TK_RETURN;

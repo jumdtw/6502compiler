@@ -17,6 +17,7 @@ enum{
     ND_IF,
     ND_ELSE,
     ND_WHILE,
+    ND_LOOP,
     ND_FUNC,
     ND_FUNC_DEFINE,
     ND_LVAR,
@@ -64,8 +65,9 @@ struct LVar{
 struct LFunc{
     Type *lvar_type;  // 関数の型
     int len;
+    int val;
     // 構文木がここにはいっている
-    std::vector<Node*> code;
+    Node *code;
     // ローカル変数リスト
     std::vector<LVar*> lvar_locals;
     char *name;

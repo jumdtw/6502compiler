@@ -1,12 +1,23 @@
+
+
 char main(){
-    char delay = 1;
-    char buf =0;
-    *delay = 2;
-    *delay = *delay - 1;
-    buf = *delay;
-    [0x4015] = buf;
-    [0x4000] = 0b10100111; 
-    [0x4001] = 0b00000000;
-    [0x4002] = 0b10100111; 
-    [0x4003] = 0b00000000;
+
+    char p = 1;
+    char buf =1;
+    char tmp = 0;
+    if(p){
+        if(buf){
+            tmp = 1;
+        }
+        if(tmp){
+            [0x4015] = 0b00000001;
+        }
+    }
+
+    
+    [0x4000] = 0b10101111; 
+    [0x4001] = 0x00;
+    [0x4002] = 0x4f;
+    [0x4003] = 0x0;
+
 }

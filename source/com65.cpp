@@ -5,6 +5,7 @@
 #include <time.h>
 #include <vector>
 #include <iostream>
+#include <random>
 #include "../include/tokenize.hpp"
 #include "../include/parse.hpp"
 #include "../include/file_controller.hpp"
@@ -20,6 +21,10 @@ std::vector<LFunc*> funcs;
 // tokenizeの結果がここに入る
 std::vector<Token> tokens;
 int pos = 0;
+int random_label = 0;
+bool array_exist = false;
+
+
 
 
 LVar *find_lvar(char *str,int len){
@@ -146,12 +151,11 @@ Node *primary(){
         node->lhs = buf;
         int len = 0;
         while(1){
-            if(tokens[pos].ty!=TK_NUM){std::cout<<"error not num array primary"<<std::endl;exit(1);}
-            buf->val = tokens[pos].val;
+            buf->rhs = (Node*)malloc(sizeof(Node));
+            buf->rhs = add();
+            len++;
             buf->lhs = (Node*)malloc(sizeof(Node));
             buf = buf->lhs;
-            len++;
-            pos++;
             if(consume((char*)"}")){break;}
             pos++;
         }
@@ -197,17 +201,13 @@ Node *primary(){
         if(consume((char*)"[")){
             node->ty = ND_ARRAY;
             node->lhs = add();
-            lvar->lvar_type->array_size = tokens[pos].val;
-            node->val = tokens[pos].val;
             if(!consume((char*)"]")){
                 std::cout<<"error array miss ']' "<<std::endl;
                 exit(1);
             }
             
-        }else{
-            lvar->lvar_type->array_size = 0;
-            node->val = 0;
         }
+
         // ノードにオフセットを入れる
         if(lvar){
             node->offset = lvar->offset;
@@ -217,6 +217,8 @@ Node *primary(){
         }
         return node;
     }
+
+    printf("%s\n",tokens[pos].str);
 
     printf("error gen node\n");
     exit(1);
@@ -330,7 +332,7 @@ Node *assign(){
         pos++;
         if(consume((char*)"]")){
             if(consume((char*)"=")){
-                node = new_node(ND_POINTER_ASSIGN_ABS,node,assign());
+                node = new_node(ND_POINTER_ASSIGN_ABS,node,equality());
                 return node;
             }
             printf("error pointer assign abs\n");
@@ -347,6 +349,8 @@ Node *assign(){
 }
 
 Node *expr(){
+
+    char array_l[] = "[";
 
     // 変数宣言
     if(check_func_type(tokens[pos].ty)){
@@ -366,10 +370,20 @@ Node *expr(){
         if(!locals.size()){
             buf_lvar->offset = 0x206;
         }else{
-            if(locals[(locals.size()-1)]->lvar_type->array_size>0){
-                buf_lvar->offset = locals[(locals.size()-1)]->offset + locals[(locals.size()-1)]->lvar_type->array_size;
+            if(!memcmp(array_l,tokens[pos+1].str,1)){
+                if(!array_exist){
+                    array_exist = true;
+                    buf_lvar->offset = 0x0700;
+                }else{
+                    std::cout << "two array can not exist" << std::endl;
+                    exit(1);  
+                }
             }else{
-                buf_lvar->offset = locals[(locals.size()-1)]->offset + 1;
+                if(locals[(locals.size()-1)]->offset>=0x0700){
+                    buf_lvar->offset = locals[(locals.size()-2)]->offset + 1;
+                }else{
+                    buf_lvar->offset = locals[(locals.size()-1)]->offset + 1;
+                }
             }
         }
         locals.push_back(buf_lvar);
@@ -385,6 +399,15 @@ Node *expr(){
 
 Node *stmt(){
     Node *node;
+
+    if(tokens[pos].ty==TK_LOOP){
+        node = (Node*)malloc(sizeof(Node));
+        node->ty = ND_LOOP;
+        pos++;
+        expect((char*)";");
+        pos++;
+        return node;
+    }
 
     if(tokens[pos].ty==TK_RETURN){
         node = (Node*)malloc(sizeof(Node));
@@ -410,8 +433,11 @@ Node *stmt(){
                     node->rhs = new_node(ND_ELSE,else_node,stmt());
                     return node;
                 }
+                
                 node->rhs = else_node;
                 return node; 
+            }else{
+                std::cout << "error if struct" << std::endl;
             }
         }
     }
@@ -432,15 +458,21 @@ Node *stmt(){
     }
     
     if(consume((char*)"{")){
+        // なぜかこのcoutがないとバグる
+        //std::cout << "" << std::endl;
         node = (Node*)malloc(sizeof(Node));
         node->ty = ND_BLOCK;
+        Node *buf = (Node*)malloc(sizeof(Node));
+        node->lhs = buf;
+        int len = 0;
         std::vector<Node*> buf_vector;
         while(!consume((char*)"}")){
-            Node *buf_node = (Node*)malloc(sizeof(Node));
-            buf_node = stmt();
-            buf_vector.push_back(buf_node);
+            buf->rhs = stmt();
+            buf->lhs = (Node*)malloc(sizeof(Node));
+            buf = buf->lhs;
+            len++;
         }
-        node->stmts = buf_vector;
+        node->val = len;
         return node;
     }
     
@@ -473,11 +505,18 @@ void program(){
                     // 引数処理
                     if(consume((char*)")")){
                         if(consume((char*)"{")){
+                            func->code = (Node*)malloc(sizeof(Node));
+                            func->val = 0;
+                            Node *buf;
+                            buf = func->code;
                             std::vector<Node*> lcode;
-                            while (memcmp(br,tokens[pos].str,1)){                         
-                                lcode.push_back(stmt());
+                            while (memcmp(br,tokens[pos].str,1)){ 
+                                buf->lhs = (Node*)malloc(sizeof(Node));
+                                buf->rhs = stmt();
+                                buf = buf->lhs;
+                                func->val++;
                             }
-                            func->code = lcode;
+
                             //std::copy(lcode.begin(),lcode.end(),back_inserter(func->code));
                             // どちらもvectorのコピー　挙動が違うので今後のために残す
                             //func->lvar_locals = locals;
@@ -507,7 +546,14 @@ void program(){
 
 }
 
+int back_random(){
+    random_label += 87;
+    return random_label;
+}
+
 void gen(Node *node){
+
+    //std::cout << "gen start" << std::endl;
 
     if(node->ty==ND_POINTER){
         printf("    ldx $%x\n",node->offset);
@@ -541,23 +587,33 @@ void gen(Node *node){
     }
     
     if(node->ty==ND_BLOCK){
-        for(int i=0;i<node->stmts.size();i++){
-            gen(node->stmts[i]);
+        Node *buf = (Node*)malloc(sizeof(Node));
+        buf = node->lhs;
+        for(int i=0;i<node->val;i++){
+            gen(buf->rhs);
+            buf = buf->lhs;
         }
         return;
     }
     
+    if(node->ty == ND_LOOP){
+        int L_LOOP = back_random();
+        printf(".%d_LOOP",L_LOOP);
+        printf("    jmp %d_LOOP\n",L_LOOP);
+        return;
+    }
+
     if(node->ty == ND_RETURN){
         gen(node->lhs);
         // aレジスタを返り値として設定する
         printf("    pla\n");
-        printf("    rts\n");
+        printf("    rti\n");
         return;
     }
     
     if(node->ty == ND_IF){
-        srand((unsigned int)time(NULL));
-        int L = rand()%10000;
+        
+        int L_IF = back_random();
         gen(node->lhs);
         printf("    pla\n");
         // sta だとゼロフラッグがうごかないので一回メモリに動かしてからldaしてる。ldaはゼロフラグに依存関係がある。
@@ -565,34 +621,44 @@ void gen(Node *node){
         printf("    lda $0\n");
         
         if(node->rhs->ty==ND_ELSE){
-            printf("    beq  %delse\n",L);
+            printf("    beq  %d_IF_jmp_else\n",L_IF);
+            printf("    jmp %d_if_execute\n",L_IF);
+            printf(".%d_IF_jmp_else",L_IF);
+            printf("    jmp .%delse\n",L_IF);
+            printf(".%d_if_execute",L_IF);
             gen(node->rhs->lhs);
-            printf("    jmp %dend\n",L);
-            printf(".%delse",L);
+            printf("    jmp %dend\n",L_IF);
+            printf(".%delse",L_IF);
             gen(node->rhs->rhs);
         }else{
-            printf("    beq  %dend\n",L);
+            printf("    beq  %d_IF_jmp_end\n",L_IF);
+            printf("    jmp %d_if_execute\n",L_IF);
+            printf(".%d_IF_jmp_end",L_IF);
+            printf("    jmp %dend\n",L_IF);
+            printf(".%d_if_execute",L_IF);
             gen(node->rhs);
         }
-        printf(".%dend",L);
+        printf(".%dend",L_IF);
+        //これがないとラベルが重複することがありバグる
+        //処理自体に意味はない
+        printf("    lda #$0\n");
         return;
     }
     
     if(node->ty == ND_WHILE){
-        srand((unsigned int)time(NULL));
-        int L = rand()%10000;
-        printf(".%d_WHILE_begin",L);
+        int L_WHILE = back_random();
+        printf(".%d_WHILE_begin",L_WHILE);
         //条件式
         gen(node->lhs);
         printf("    pla\n");
         // sta だとゼロフラッグがうごかないので一回メモリに動かしてからldaしてる。ldaはゼロフラグに依存関係がある。
         printf("    sta $0\n");
         printf("    lda $0\n");
-        printf("    beq  %d_WHILE_end\n",L);
+        printf("    beq  %d_WHILE_end\n",L_WHILE);
         //演算
         gen(node->rhs);
-        printf("    jmp %d_WHILE_begin\n",L);
-        printf(".%d_WHILE_end",L);
+        printf("    jmp %d_WHILE_begin\n",L_WHILE);
+        printf(".%d_WHILE_end",L_WHILE);
         return;
     }
 
@@ -612,8 +678,9 @@ void gen(Node *node){
     }else if(node->ty==ND_IMM_ARRAY){
         Node *buf = node->lhs;
         for(int i=0;i<node->val;i++){
-            printf("    lda #$%x\n",buf->val);
-            printf("    pha\n");
+            //std::cout << "ND_IMM_ARRAY start" << std::endl;
+            gen(buf->rhs);
+            //std::cout << "ND_IMM_ARRAY end" << std::endl;
             buf = buf->lhs;
         }
         return;
@@ -622,17 +689,36 @@ void gen(Node *node){
         printf("    pha\n");
         return;
     }else if(node->ty==ND_ASSIGN){ 
-        gen(node->rhs);
-        if(node->lhs->val<=0){
+
+        if(node->lhs->ty==ND_LVAR){
+            gen(node->rhs);
             printf("    pla\n");
             printf("    sta $%x\n",node->lhs->offset);
             return;
         }
-        for(int i=node->lhs->val-1;i>=0;i--){
+
+        if(node->rhs->ty==ND_IMM_ARRAY){
+            int L_ARRAY;
+            L_ARRAY = back_random();
+            gen(node->rhs);
+            gen(node->lhs->lhs);
             printf("    pla\n");
-            printf("    sta $%x\n",node->lhs->offset+i);
+            printf("    sta $0\n");
+            printf("    ldx $0\n");
+            printf("    dex\n");
+            printf(".%dassgin_array", L_ARRAY);
+            printf("    pla\n");
+            printf("    sta [#$%x]\n", node->lhs->offset);
+            printf("    dex\n");
+            printf("    bne %dassgin_array\n", L_ARRAY);
+            // x == 0 になっても代入してほしいのでこれがいる
+            printf("    pla\n");
+            printf("    sta $%x\n", node->lhs->offset);
+            return;
         }
-        return;
+
+        std::cout << "node->rhs is not LVAR or array" << std::endl;
+        exit(1);
     }else if(node->ty==ND_POINTER_ASSIGN){ // この代入ポインタの値は0xff以下であるという前提である。
         gen(node->rhs);
         printf("    pla\n");
@@ -651,12 +737,10 @@ void gen(Node *node){
     普通の assign は普通に変数のoffsetの所に値を入れるが
     pointer_assignは変数の値をoffsetと考えその部分に値を入れる。
     */
-
     gen(node->lhs);
     gen(node->rhs);
 
-    srand((unsigned int)time(NULL));
-    int random = rand();
+
 
     switch(node->ty){
 
@@ -675,6 +759,8 @@ void gen(Node *node){
             printf("    sbc $0\n");
             break;
         case '*':
+            int L_MUL;
+            L_MUL = back_random();
             printf("    pla\n");
             printf("    sta $0\n");
             printf("    ldx $0\n");
@@ -682,10 +768,10 @@ void gen(Node *node){
             printf("    sta $0\n");
             printf("    lda #$0\n");
             printf("    clc\n");
-            printf(".%d_mul",random);
+            printf(".%d_mul",L_MUL);
             printf("    adc $0\n");
             printf("    dex\n");
-            printf("    bne %d_mul\n",random);
+            printf("    bne %d_mul\n",L_MUL);
             break;
         // 割り算だけまだ実装してないよ♡
         case '/':
@@ -694,43 +780,47 @@ void gen(Node *node){
             break;
 
         case ND_SETE: // == 
+            int L_SETE;
+            L_SETE = back_random();
             printf("    sec\n");
             printf("    pla\n");
             printf("    sta $0\n");
             printf("    pla\n");
             printf("    sbc $0\n");
 
-            printf("    beq %d_set_1\n",random);
+            printf("    beq %d_set_1\n",L_SETE);
 
-            printf(".%d_set_0",random);
+            printf(".%d_set_0",L_SETE);
             printf("    lda #$0\n");
-            printf("    pha\n");
-            printf("    jmp %d_sete_end",random);
-            printf(".%d_set_1",random);
+            //printf("    pha\n");
+            printf("    jmp %d_sete_end\n",L_SETE);
+            printf(".%d_set_1",L_SETE);
             printf("    lda #$1\n");
-            printf("    pha\n");
+            //printf("    pha\n");
 
-            printf(".%d_sete_end",random);
+            printf(".%d_sete_end",L_SETE);
             break;
 
         case ND_SETL:  // <
+            int L_SETL;
+            L_SETL = back_random();
             printf("    sec\n");
             printf("    pla\n");
             printf("    sta $0\n");
             printf("    pla\n");
             printf("    sbc $0\n");
 
-            printf("    bmi %d_set_1\n",random);
+            printf("    jmp %d_set_1\n",L_SETL);
 
-            printf(".%d_set_0",random);
+            printf(".%d_set_0",L_SETL);
             printf("    lda #$0\n");
-            printf("    pha\n");
-            printf("    jmp %d_sete_end",random);
-            printf(".%d_set_1",random);
+            //printf("    pha\n");
+            printf("    jmp %d_sete_end\n",L_SETL);
+            printf(".%d_set_1",L_SETL);
             printf("    lda #$1\n");
-            printf("    pha\n");
+            //printf("    pha\n");
 
-            printf(".%d_sete_end",random);
+            printf(".%d_sete_end",L_SETL);
             break;
         // とりあえず実装しない。
         case ND_SETLE: // <=
@@ -739,23 +829,25 @@ void gen(Node *node){
             printf("    movzb rax, al\n");
             break;
         case ND_SETNE: // !=
+            int L_SETNE;
+            L_SETNE = back_random();
             printf("    sec\n");
             printf("    pla\n");
             printf("    sta $0\n");
             printf("    pla\n");
             printf("    sbc $0\n");
 
-            printf("    bne %d_set_1\n",random);
+            printf("    bne %d_set_1\n",L_SETNE);
 
-            printf(".%d_set_0",random);
+            printf(".%d_set_0",L_SETNE);
             printf("    lda #$0\n");
             //printf("    pha\n");
-            printf("    jmp %d_sete_end\n",random);
-            printf(".%d_set_1",random);
+            printf("    jmp %d_sete_end\n",L_SETNE);
+            printf(".%d_set_1",L_SETNE);
             printf("    lda #$1\n");
             //printf("    pha\n");
 
-            printf(".%d_sete_end",random);
+            printf(".%d_sete_end",L_SETNE);
             break;
     }
 
@@ -765,6 +857,8 @@ void gen(Node *node){
 
 
 int main(int argc,char **argv){
+    srand((unsigned)time(NULL));
+    random_label = rand();
     if(argc != 2){
         fprintf(stderr,"引数の個数が正しくありません\n");
         return 1;
@@ -794,16 +888,19 @@ int main(int argc,char **argv){
         LFunc *func = funcs[i];
         if(!memcmp(func->name,main_str,func->len)){main_func = func;continue;}
         printf(".%.*s",func->len,func->name);
-        for(int k=0;k<func->code.size();k++){
-            Node *code = func->code[k];
-            gen(code);
+        Node *code = func->code;
+        for(int k=0;k<func->val;k++){
+            gen(code->rhs);
+            code = code->lhs;
         }
         printf("\n");
     }
 
     printf(".%s",main_str);
-    for(int i=0;i<main_func->code.size();i++){
-        gen(main_func->code[i]);
+    Node *maincode = main_func->code;
+    for(int i=0;i<main_func->val;i++){
+        gen(maincode->rhs);
+        maincode = maincode->lhs;
     }
     
     return 0;
